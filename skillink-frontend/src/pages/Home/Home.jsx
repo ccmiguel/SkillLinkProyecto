@@ -1,12 +1,16 @@
 import React from 'react';
 import './Home.css';
+import logo from "../../assets/logo.jpg";
 
 const Home = () => {
   return (
     <div className="home-container">
       <header className="hero-section">
+        <div className="logo-container">
+          <img src={logo} alt="Skillink Logo" className="logo" />
+        </div>
         <h1>Bienvenido a Skillink</h1>
-        <p>Plataforma educativa integral para el aprendizaje personalizado</p>
+        <p>Conectando talento con conocimiento a través de educación personalizada</p>
       </header>
 
       <section className="mission-vision">

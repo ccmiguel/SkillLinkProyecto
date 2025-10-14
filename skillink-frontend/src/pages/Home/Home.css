@@ -6,88 +6,219 @@
 
 .hero-section {
   text-align: center;
-  padding: 60px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 80px 20px;
+  background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 50%, #60A5FA 100%);
   color: white;
-  border-radius: 15px;
-  margin-bottom: 40px;
+  border-radius: 20px;
+  margin-bottom: 50px;
+  box-shadow: 0 10px 30px rgba(30, 58, 138, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-section::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, rgba(249, 115, 22, 0.1) 0%, transparent 70%);
 }
 
 .hero-section h1 {
-  font-size: 3rem;
+  font-size: 3.5rem;
   margin-bottom: 20px;
+  font-weight: 700;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .hero-section p {
-  font-size: 1.2rem;
-  opacity: 0.9;
+  font-size: 1.3rem;
+  opacity: 0.95;
+  max-width: 600px;
+  margin: 0 auto;
+  font-weight: 300;
 }
 
 .mission-vision {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 30px;
-  margin-bottom: 50px;
+  margin-bottom: 60px;
 }
 
 .card {
   background: white;
-  padding: 30px;
-  border-radius: 10px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  border-left: 4px solid #667eea;
+  padding: 35px;
+  border-radius: 15px;
+  box-shadow: 0 8px 25px rgba(30, 58, 138, 0.08);
+  border-left: 5px solid #1E3A8A;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, #1E3A8A, #3B82F6, #60A5FA);
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 35px rgba(30, 58, 138, 0.15);
 }
 
 .card h2 {
-  color: #333;
-  margin-bottom: 15px;
+  color: #1E3A8A;
+  margin-bottom: 20px;
+  font-size: 1.8rem;
+  font-weight: 600;
 }
 
 .card p {
-  color: #666;
-  line-height: 1.6;
+  color: #4B5563;
+  line-height: 1.7;
+  font-size: 1.05rem;
 }
 
 .features h2 {
   text-align: center;
-  margin-bottom: 40px;
-  color: #333;
+  margin-bottom: 50px;
+  color: #1E3A8A;
+  font-size: 2.5rem;
+  font-weight: 700;
 }
 
 .features-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 25px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 30px;
 }
 
 .feature-card {
-  background: #f8f9fa;
-  padding: 25px;
-  border-radius: 10px;
+  background: linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%);
+  padding: 30px 25px;
+  border-radius: 15px;
   text-align: center;
-  border: 1px solid #e9ecef;
-  transition: transform 0.3s ease;
+  border: 2px solid #E2E8F0;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.feature-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, #1E3A8A, #3B82F6, #60A5FA);
 }
 
 .feature-card:hover {
-  transform: translateY(-5px);
+  transform: translateY(-8px);
+  box-shadow: 0 15px 35px rgba(30, 58, 138, 0.15);
+  border-color: #3B82F6;
 }
 
 .feature-card h3 {
-  color: #333;
-  margin-bottom: 10px;
+  color: #1E3A8A;
+  margin-bottom: 15px;
+  font-size: 1.3rem;
+  font-weight: 600;
 }
 
 .feature-card p {
-  color: #666;
+  color: #6B7280;
+  line-height: 1.6;
+}
+
+.feature-card:nth-child(4)::after {
+  content: '';
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  width: 8px;
+  height: 8px;
+  background: #F97316;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 @media (max-width: 768px) {
   .mission-vision {
     grid-template-columns: 1fr;
+    gap: 20px;
   }
   
   .hero-section h1 {
+    font-size: 2.5rem;
+  }
+  
+  .hero-section {
+    padding: 60px 20px;
+  }
+  
+  .features h2 {
     font-size: 2rem;
   }
+  
+  .card {
+    padding: 25px;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-section h1 {
+    font-size: 2rem;
+  }
+  
+  .hero-section p {
+    font-size: 1.1rem;
+  }
+  
+  .features-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Agregar al final del archivo CSS */
+
+.logo-container {
+  margin-bottom: 20px;
+}
+
+.logo {
+  height: 80px;
+  width: auto;
+  filter: brightness(0) invert(1); /* Hace el logo blanco si es necesario */
+}
+
+/* Si quieres el logo con sus colores originales, usa esto: */
+.hero-section .logo {
+  height: 80px;
+  width: auto;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }

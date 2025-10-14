@@ -3,7 +3,7 @@ import pool from "../db.js";
 
 const router = Router();
 
-// GET - Todas las inscripciones
+// GET - Todas las inscripciones (solo las activas)
 router.get("/", async (req, res) => {
   try {
     const result = await pool.query(`
@@ -12,9 +12,10 @@ router.get("/", async (req, res) => {
              t.nombre_tutoria, t.sigla, t.cupo as cupo_tutoria,
              tu.nombre as tutor_nombre
       FROM public.inscripcion i
-      JOIN public.estudiante e ON i.id_estudiante = e.id_estudiante
-      JOIN public.tutoria t ON i.id_tutoria = t.id_tutoria
-      JOIN public.tutor tu ON t.id_tutor = tu.id_tutor
+      JOIN public.estudiante e ON i.id_estudiante = e.id_estudiante AND e.activo = TRUE
+      JOIN public.tutoria t ON i.id_tutoria = t.id_tutoria AND t.activo = TRUE
+      JOIN public.tutor tu ON t.id_tutor = tu.id_tutor AND tu.activo = TRUE
+      WHERE i.activo = TRUE
       ORDER BY i.fecha_inscripcion DESC
     `);
     res.json(result.rows);
@@ -24,7 +25,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// GET - Inscripción por ID
+// GET - Inscripción por ID (solo si está activa)
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -35,10 +36,10 @@ router.get("/:id", async (req, res) => {
               t.nombre_tutoria, t.sigla, t.cupo as cupo_tutoria, t.descripcion_tutoria,
               tu.nombre as tutor_nombre, tu.especialidad as tutor_especialidad
        FROM public.inscripcion i
-       JOIN public.estudiante e ON i.id_estudiante = e.id_estudiante
-       JOIN public.tutoria t ON i.id_tutoria = t.id_tutoria
-       JOIN public.tutor tu ON t.id_tutor = tu.id_tutor
-       WHERE i.id_inscripcion = $1`,
+       JOIN public.estudiante e ON i.id_estudiante = e.id_estudiante AND e.activo = TRUE
+       JOIN public.tutoria t ON i.id_tutoria = t.id_tutoria AND t.activo = TRUE
+       JOIN public.tutor tu ON t.id_tutor = tu.id_tutor AND tu.activo = TRUE
+       WHERE i.id_inscripcion = $1 AND i.activo = TRUE`,
       [id]
     );
     
@@ -53,7 +54,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// GET - Inscripciones por estudiante
+// GET - Inscripciones por estudiante (solo activas)
 router.get("/estudiante/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -61,9 +62,9 @@ router.get("/estudiante/:id", async (req, res) => {
       `SELECT i.*, t.nombre_tutoria, t.sigla, t.descripcion_tutoria,
               tu.nombre as tutor_nombre, tu.especialidad
        FROM public.inscripcion i
-       JOIN public.tutoria t ON i.id_tutoria = t.id_tutoria
-       JOIN public.tutor tu ON t.id_tutor = tu.id_tutor
-       WHERE i.id_estudiante = $1
+       JOIN public.tutoria t ON i.id_tutoria = t.id_tutoria AND t.activo = TRUE
+       JOIN public.tutor tu ON t.id_tutor = tu.id_tutor AND tu.activo = TRUE
+       WHERE i.id_estudiante = $1 AND i.activo = TRUE
        ORDER BY i.fecha_inscripcion DESC`,
       [id]
     );
@@ -74,15 +75,15 @@ router.get("/estudiante/:id", async (req, res) => {
   }
 });
 
-// GET - Inscripciones por tutoria
+// GET - Inscripciones por tutoria (solo activas)
 router.get("/tutoria/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query(
       `SELECT i.*, e.nombre as estudiante_nombre, e.paterno, e.materno, e.email, e.carrera
        FROM public.inscripcion i
-       JOIN public.estudiante e ON i.id_estudiante = e.id_estudiante
-       WHERE i.id_tutoria = $1
+       JOIN public.estudiante e ON i.id_estudiante = e.id_estudiante AND e.activo = TRUE
+       WHERE i.id_tutoria = $1 AND i.activo = TRUE
        ORDER BY i.fecha_inscripcion DESC`,
       [id]
     );
@@ -93,16 +94,16 @@ router.get("/tutoria/:id", async (req, res) => {
   }
 });
 
-// GET - Inscripciones por estado
+// GET - Inscripciones por estado (solo activas)
 router.get("/estado/:estado", async (req, res) => {
   try {
     const { estado } = req.params;
     const result = await pool.query(
       `SELECT i.*, e.nombre as estudiante_nombre, t.nombre_tutoria, t.sigla
        FROM public.inscripcion i
-       JOIN public.estudiante e ON i.id_estudiante = e.id_estudiante
-       JOIN public.tutoria t ON i.id_tutoria = t.id_tutoria
-       WHERE i.estado_inscripcion = $1
+       JOIN public.estudiante e ON i.id_estudiante = e.id_estudiante AND e.activo = TRUE
+       JOIN public.tutoria t ON i.id_tutoria = t.id_tutoria AND t.activo = TRUE
+       WHERE i.estado_inscripcion = $1 AND i.activo = TRUE
        ORDER BY i.fecha_inscripcion DESC`,
       [estado]
     );
@@ -113,7 +114,7 @@ router.get("/estado/:estado", async (req, res) => {
   }
 });
 
-// POST - Crear inscripción
+// POST - Crear inscripción (se crea como activa por defecto)
 router.post("/", async (req, res) => {
   try {
     const { fecha_inscripcion, estado_inscripcion, cupo_asignado, id_estudiante, id_tutoria } = req.body;
@@ -123,9 +124,29 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "ID del estudiante y ID de la tutoría son requeridos" });
     }
     
-    // Verificar si el estudiante ya está inscrito en esta tutoría
+    // Verificar si el estudiante existe y está activo
+    const estudiante = await pool.query(
+      "SELECT * FROM public.estudiante WHERE id_estudiante = $1 AND activo = TRUE",
+      [id_estudiante]
+    );
+    
+    if (estudiante.rows.length === 0) {
+      return res.status(404).json({ error: "Estudiante no encontrado o deshabilitado" });
+    }
+    
+    // Verificar si la tutoría existe y está activa
+    const tutoria = await pool.query(
+      "SELECT * FROM public.tutoria WHERE id_tutoria = $1 AND activo = TRUE",
+      [id_tutoria]
+    );
+    
+    if (tutoria.rows.length === 0) {
+      return res.status(404).json({ error: "Tutoría no encontrada o deshabilitada" });
+    }
+    
+    // Verificar si el estudiante ya está inscrito en esta tutoría (inscripción activa)
     const inscripcionExistente = await pool.query(
-      "SELECT * FROM public.inscripcion WHERE id_estudiante = $1 AND id_tutoria = $2",
+      "SELECT * FROM public.inscripcion WHERE id_estudiante = $1 AND id_tutoria = $2 AND activo = TRUE",
       [id_estudiante, id_tutoria]
     );
     
@@ -133,19 +154,10 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "El estudiante ya está inscrito en esta tutoría" });
     }
     
-    // Verificar cupos disponibles en la tutoría
-    const tutoria = await pool.query(
-      "SELECT cupo FROM public.tutoria WHERE id_tutoria = $1",
-      [id_tutoria]
-    );
-    
-    if (tutoria.rows.length === 0) {
-      return res.status(404).json({ error: "Tutoría no encontrada" });
-    }
-    
+    // Verificar cupos disponibles en la tutoría (solo inscripciones activas)
     const cupoTutoria = tutoria.rows[0].cupo;
     const inscripcionesActivas = await pool.query(
-      "SELECT COUNT(*) as total FROM public.inscripcion WHERE id_tutoria = $1 AND estado_inscripcion = 'Activa'",
+      "SELECT COUNT(*) as total FROM public.inscripcion WHERE id_tutoria = $1 AND estado_inscripcion = 'Activa' AND activo = TRUE",
       [id_tutoria]
     );
     
@@ -156,8 +168,8 @@ router.post("/", async (req, res) => {
     }
     
     const result = await pool.query(
-      `INSERT INTO public.inscripcion (fecha_inscripcion, estado_inscripcion, cupo_asignado, id_estudiante, id_tutoria) 
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      `INSERT INTO public.inscripcion (fecha_inscripcion, estado_inscripcion, cupo_asignado, id_estudiante, id_tutoria, activo) 
+       VALUES ($1, $2, $3, $4, $5, TRUE) RETURNING *`,
       [fecha_inscripcion || new Date(), estado_inscripcion || 'Pendiente', cupo_asignado, id_estudiante, id_tutoria]
     );
     
@@ -168,7 +180,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// PUT - Actualizar inscripción
+// PUT - Actualizar inscripción (solo si está activa)
 router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -177,7 +189,7 @@ router.put("/:id", async (req, res) => {
     const result = await pool.query(
       `UPDATE public.inscripcion 
        SET fecha_inscripcion=$1, estado_inscripcion=$2, cupo_asignado=$3 
-       WHERE id_inscripcion=$4 RETURNING *`,
+       WHERE id_inscripcion=$4 AND activo = TRUE RETURNING *`,
       [fecha_inscripcion, estado_inscripcion, cupo_asignado, id]
     );
 
@@ -192,7 +204,7 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// PATCH - Cambiar estado de inscripción
+// PATCH - Cambiar estado de inscripción (solo si está activa)
 router.patch("/:id/estado", async (req, res) => {
   try {
     const { id } = req.params;
@@ -203,7 +215,7 @@ router.patch("/:id/estado", async (req, res) => {
     }
     
     const result = await pool.query(
-      "UPDATE public.inscripcion SET estado_inscripcion=$1 WHERE id_inscripcion=$2 RETURNING *",
+      "UPDATE public.inscripcion SET estado_inscripcion=$1 WHERE id_inscripcion=$2 AND activo = TRUE RETURNING *",
       [estado_inscripcion, id]
     );
 
@@ -218,55 +230,100 @@ router.patch("/:id/estado", async (req, res) => {
   }
 });
 
-// DELETE - Eliminar inscripción
+// DELETE - Eliminación lógica (soft delete)
 router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Verificar si hay pagos asociados a esta inscripción
+    // Verificar si hay pagos asociados activos a esta inscripción
     const pagos = await pool.query(
-      "SELECT * FROM public.pago_qr WHERE id_inscripcion = $1",
+      "SELECT * FROM public.pago_qr WHERE id_inscripcion = $1 AND activo = TRUE",
       [id]
     );
     
     if (pagos.rows.length > 0) {
       return res.status(400).json({ 
-        error: "No se puede eliminar la inscripción porque tiene pagos asociados" 
+        error: "No se puede deshabilitar la inscripción porque tiene pagos activos asociados" 
       });
     }
     
-    // Verificar si hay respuestas asociadas a esta inscripción
+    // Verificar si hay respuestas activas asociadas a esta inscripción
     const respuestas = await pool.query(
-      "SELECT * FROM public.respuesta WHERE id_inscripcion = $1",
+      "SELECT * FROM public.respuesta WHERE id_inscripcion = $1 AND activo = TRUE",
       [id]
     );
     
     if (respuestas.rows.length > 0) {
       return res.status(400).json({ 
-        error: "No se puede eliminar la inscripción porque tiene respuestas asociadas" 
+        error: "No se puede deshabilitar la inscripción porque tiene respuestas activas asociadas" 
       });
     }
     
+    // En lugar de DELETE, hacemos un UPDATE para marcar como inactivo
     const result = await pool.query(
-      "DELETE FROM public.inscripcion WHERE id_inscripcion = $1 RETURNING *",
+      `UPDATE public.inscripcion SET activo = FALSE 
+       WHERE id_inscripcion = $1 AND activo = TRUE 
+       RETURNING *`,
       [id]
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Inscripción no encontrada" });
+      return res.status(404).json({ error: "Inscripción no encontrada o ya está deshabilitada" });
     }
 
     res.json({ 
-      mensaje: "Inscripción eliminada correctamente",
+      mensaje: "Inscripción deshabilitada correctamente",
       inscripcion: result.rows[0]
     });
   } catch (error) {
-    console.error("Error al eliminar inscripción:", error.message);
-    res.status(500).json({ error: "Error al eliminar inscripción" });
+    console.error("Error al deshabilitar inscripción:", error.message);
+    res.status(500).json({ error: "Error al deshabilitar inscripción" });
   }
 });
 
-// GET - Estadísticas de inscripciones
+// OPCIONAL: Endpoint para reactivar una inscripción
+router.patch("/:id/activar", async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Verificar que la tutoría y estudiante sigan activos
+    const inscripcion = await pool.query(
+      `SELECT i.*, e.activo as estudiante_activo, t.activo as tutoria_activo
+       FROM public.inscripcion i
+       JOIN public.estudiante e ON i.id_estudiante = e.id_estudiante
+       JOIN public.tutoria t ON i.id_tutoria = t.id_tutoria
+       WHERE i.id_inscripcion = $1`,
+      [id]
+    );
+    
+    if (inscripcion.rows.length === 0) {
+      return res.status(404).json({ error: "Inscripción no encontrada" });
+    }
+    
+    if (!inscripcion.rows[0].estudiante_activo) {
+      return res.status(400).json({ error: "No se puede reactivar: el estudiante está deshabilitado" });
+    }
+    
+    if (!inscripcion.rows[0].tutoria_activo) {
+      return res.status(400).json({ error: "No se puede reactivar: la tutoría está deshabilitada" });
+    }
+    
+    const result = await pool.query(
+      "UPDATE public.inscripcion SET activo = TRUE WHERE id_inscripcion = $1 RETURNING *",
+      [id]
+    );
+
+    res.json({ 
+      mensaje: "Inscripción reactivada correctamente",
+      inscripcion: result.rows[0]
+    });
+  } catch (error) {
+    console.error("Error al reactivar inscripción:", error.message);
+    res.status(500).json({ error: "Error al reactivar inscripción" });
+  }
+});
+
+// GET - Estadísticas de inscripciones (solo activas)
 router.get("/estadisticas/resumen", async (req, res) => {
   try {
     const result = await pool.query(`
@@ -277,6 +334,7 @@ router.get("/estadisticas/resumen", async (req, res) => {
         COUNT(CASE WHEN estado_inscripcion = 'Cancelada' THEN 1 END) as canceladas,
         AVG(cupo_asignado) as promedio_cupo
       FROM public.inscripcion
+      WHERE activo = TRUE
     `);
     
     res.json(result.rows[0]);

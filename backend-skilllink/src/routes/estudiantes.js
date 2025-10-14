@@ -3,10 +3,12 @@ import pool from "../db.js";
 
 const router = Router();
 
-// GET - Todos los estudiantes
+// GET - Todos los estudiantes (solo los activos)
 router.get("/", async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM public.estudiante ORDER BY id_estudiante");
+    const result = await pool.query(
+      "SELECT * FROM public.estudiante WHERE activo = TRUE ORDER BY id_estudiante"
+    );
     res.json(result.rows);
   } catch (error) {
     console.error("Error al obtener estudiantes:", error.message);
@@ -14,11 +16,14 @@ router.get("/", async (req, res) => {
   }
 });
 
-// GET - Estudiante por ID
+// GET - Estudiante por ID (solo si está activo)
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query("SELECT * FROM public.estudiante WHERE id_estudiante = $1", [id]);
+    const result = await pool.query(
+      "SELECT * FROM public.estudiante WHERE id_estudiante = $1 AND activo = TRUE", 
+      [id]
+    );
     
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Estudiante no encontrado" });
@@ -31,7 +36,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// POST - Crear estudiante
+// POST - Crear estudiante (se crea como activo por defecto)
 router.post("/", async (req, res) => {
   try {
     const { nombre, paterno, materno, celular, email, carrera, univer_institu } = req.body;
@@ -42,8 +47,8 @@ router.post("/", async (req, res) => {
     }
     
     const result = await pool.query(
-      `INSERT INTO public.estudiante (nombre, paterno, materno, celular, email, carrera, univer_institu) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      `INSERT INTO public.estudiante (nombre, paterno, materno, celular, email, carrera, univer_institu, activo) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE) RETURNING *`,
       [nombre, paterno, materno, celular, email, carrera, univer_institu]
     );
     res.status(201).json(result.rows[0]);
@@ -53,15 +58,15 @@ router.post("/", async (req, res) => {
   }
 });
 
-// PUT - Actualizar estudiante
+// PUT - Actualizar estudiante (solo si está activo)
 router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { nombre, paterno, materno, celular, email, carrera, univer_institu } = req.body;
     
-    // Validar que el estudiante existe
+    // Validar que el estudiante existe y está activo
     const estudianteExistente = await pool.query(
-      "SELECT * FROM public.estudiante WHERE id_estudiante = $1",
+      "SELECT * FROM public.estudiante WHERE id_estudiante = $1 AND activo = TRUE",
       [id]
     );
     
@@ -72,7 +77,7 @@ router.put("/:id", async (req, res) => {
     const result = await pool.query(
       `UPDATE public.estudiante 
        SET nombre=$1, paterno=$2, materno=$3, celular=$4, email=$5, carrera=$6, univer_institu=$7 
-       WHERE id_estudiante=$8 RETURNING *`,
+       WHERE id_estudiante=$8 AND activo = TRUE RETURNING *`,
       [nombre, paterno, materno, celular, email, carrera, univer_institu, id]
     );
 
@@ -83,15 +88,15 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// PATCH - Actualizar parcialmente estudiante
+// PATCH - Actualizar parcialmente estudiante (solo si está activo)
 router.patch("/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
     
-    // Validar que el estudiante existe
+    // Validar que el estudiante existe y está activo
     const estudianteExistente = await pool.query(
-      "SELECT * FROM public.estudiante WHERE id_estudiante = $1",
+      "SELECT * FROM public.estudiante WHERE id_estudiante = $1 AND activo = TRUE",
       [id]
     );
     
@@ -118,7 +123,7 @@ router.patch("/:id", async (req, res) => {
     
     values.push(id);
     
-    const query = `UPDATE public.estudiante SET ${fields.join(', ')} WHERE id_estudiante = $${paramCount} RETURNING *`;
+    const query = `UPDATE public.estudiante SET ${fields.join(', ')} WHERE id_estudiante = $${paramCount} AND activo = TRUE RETURNING *`;
     const result = await pool.query(query, values);
     
     res.json(result.rows[0]);
@@ -128,25 +133,54 @@ router.patch("/:id", async (req, res) => {
   }
 });
 
-// DELETE - Eliminar estudiante
+// DELETE - Eliminación lógica (soft delete)
 router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params;
     
     // Verificar si el estudiante tiene inscripciones activas
     const inscripciones = await pool.query(
-      "SELECT * FROM public.inscripcion WHERE id_estudiante = $1 AND estado_inscripcion = 'Activa'",
+      `SELECT i.* FROM public.inscripcion i 
+       JOIN public.estudiante e ON i.id_estudiante = e.id_estudiante 
+       WHERE i.id_estudiante = $1 AND i.estado_inscripcion = 'Activa' AND e.activo = TRUE`,
       [id]
     );
     
     if (inscripciones.rows.length > 0) {
       return res.status(400).json({ 
-        error: "No se puede eliminar el estudiante porque tiene inscripciones activas" 
+        error: "No se puede deshabilitar el estudiante porque tiene inscripciones activas" 
       });
     }
     
+    // En lugar de DELETE, hacemos un UPDATE para marcar como inactivo
     const result = await pool.query(
-      "DELETE FROM public.estudiante WHERE id_estudiante = $1 RETURNING *",
+      `UPDATE public.estudiante SET activo = FALSE 
+       WHERE id_estudiante = $1 AND activo = TRUE 
+       RETURNING *`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Estudiante no encontrado o ya está deshabilitado" });
+    }
+
+    res.json({ 
+      mensaje: "Estudiante deshabilitado correctamente",
+      estudiante: result.rows[0]
+    });
+  } catch (error) {
+    console.error("Error al deshabilitar estudiante:", error.message);
+    res.status(500).json({ error: "Error al deshabilitar estudiante" });
+  }
+});
+
+// OPCIONAL: Endpoint para reactivar un estudiante
+router.patch("/:id/activar", async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await pool.query(
+      "UPDATE public.estudiante SET activo = TRUE WHERE id_estudiante = $1 RETURNING *",
       [id]
     );
 
@@ -155,22 +189,23 @@ router.delete("/:id", async (req, res) => {
     }
 
     res.json({ 
-      mensaje: "Estudiante eliminado correctamente",
+      mensaje: "Estudiante reactivado correctamente",
       estudiante: result.rows[0]
     });
   } catch (error) {
-    console.error("Error al eliminar estudiante:", error.message);
-    res.status(500).json({ error: "Error al eliminar estudiante" });
+    console.error("Error al reactivar estudiante:", error.message);
+    res.status(500).json({ error: "Error al reactivar estudiante" });
   }
 });
 
-// GET - Buscar estudiantes por nombre o email
+// GET - Buscar estudiantes por nombre o email (solo activos)
 router.get("/buscar/:termino", async (req, res) => {
   try {
     const { termino } = req.params;
     const result = await pool.query(
       `SELECT * FROM public.estudiante 
-       WHERE nombre ILIKE $1 OR paterno ILIKE $1 OR email ILIKE $1 
+       WHERE (nombre ILIKE $1 OR paterno ILIKE $1 OR email ILIKE $1) 
+       AND activo = TRUE
        ORDER BY nombre, paterno`,
       [`%${termino}%`]
     );
@@ -182,12 +217,14 @@ router.get("/buscar/:termino", async (req, res) => {
   }
 });
 
-// GET - Estudiantes por universidad/institucion
+// GET - Estudiantes por universidad/institucion (solo activos)
 router.get("/institucion/:institucion", async (req, res) => {
   try {
     const { institucion } = req.params;
     const result = await pool.query(
-      "SELECT * FROM public.estudiante WHERE univer_institu ILIKE $1 ORDER BY nombre, paterno",
+      `SELECT * FROM public.estudiante 
+       WHERE univer_institu ILIKE $1 AND activo = TRUE 
+       ORDER BY nombre, paterno`,
       [`%${institucion}%`]
     );
     
@@ -198,10 +235,21 @@ router.get("/institucion/:institucion", async (req, res) => {
   }
 });
 
-// GET - Inscripciones del estudiante
+// GET - Inscripciones del estudiante (solo si el estudiante está activo)
 router.get("/:id/inscripciones", async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // Verificar que el estudiante existe y está activo
+    const estudiante = await pool.query(
+      "SELECT * FROM public.estudiante WHERE id_estudiante = $1 AND activo = TRUE",
+      [id]
+    );
+    
+    if (estudiante.rows.length === 0) {
+      return res.status(404).json({ error: "Estudiante no encontrado" });
+    }
+    
     const result = await pool.query(
       `SELECT i.*, t.nombre_tutoria, t.sigla 
        FROM public.inscripcion i

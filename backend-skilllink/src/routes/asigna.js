@@ -3,7 +3,7 @@ import pool from "../db.js";
 
 const router = Router();
 
-// GET - Todas las asignaciones
+// GET - Todas las asignaciones (solo las activas)
 router.get("/", async (req, res) => {
   try {
     const result = await pool.query(`
@@ -12,6 +12,7 @@ router.get("/", async (req, res) => {
       JOIN public.tutoria t ON a.id_tutoria = t.id_tutoria
       JOIN public.tutor tu ON a.id_tutor = tu.id_tutor
       JOIN public.aula au ON a.id_aula = au.id_aula
+      WHERE a.activo = TRUE
     `);
     res.json(result.rows);
   } catch (error) {
@@ -20,7 +21,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// GET - Asignación por IDs compuestos
+// GET - Asignación por IDs compuestos (solo si está activa)
 router.get("/:id_aula/:id_tutoria/:id_tutor", async (req, res) => {
   try {
     const { id_aula, id_tutoria, id_tutor } = req.params;
@@ -30,7 +31,7 @@ router.get("/:id_aula/:id_tutoria/:id_tutor", async (req, res) => {
        JOIN public.tutoria t ON a.id_tutoria = t.id_tutoria
        JOIN public.tutor tu ON a.id_tutor = tu.id_tutor
        JOIN public.aula au ON a.id_aula = au.id_aula
-       WHERE a.id_aula = $1 AND a.id_tutoria = $2 AND a.id_tutor = $3`,
+       WHERE a.id_aula = $1 AND a.id_tutoria = $2 AND a.id_tutor = $3 AND a.activo = TRUE`,
       [id_aula, id_tutoria, id_tutor]
     );
     
@@ -44,13 +45,13 @@ router.get("/:id_aula/:id_tutoria/:id_tutor", async (req, res) => {
   }
 });
 
-// POST - Crear asignación
+// POST - Crear asignación (se crea como activa por defecto)
 router.post("/", async (req, res) => {
   try {
     const { id_aula, id_tutoria, id_tutor, hora_inicio, hora_fin, dia } = req.body;
     const result = await pool.query(
-      `INSERT INTO public.asigna (id_aula, id_tutoria, id_tutor, hora_inicio, hora_fin, dia) 
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      `INSERT INTO public.asigna (id_aula, id_tutoria, id_tutor, hora_inicio, hora_fin, dia, activo) 
+       VALUES ($1, $2, $3, $4, $5, $6, TRUE) RETURNING *`,
       [id_aula, id_tutoria, id_tutor, hora_inicio, hora_fin, dia]
     );
     res.status(201).json(result.rows[0]);
@@ -59,7 +60,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// PUT - Actualizar asignación
+// PUT - Actualizar asignación (solo si está activa)
 router.put("/:id_aula/:id_tutoria/:id_tutor", async (req, res) => {
   try {
     const { id_aula, id_tutoria, id_tutor } = req.params;
@@ -68,7 +69,7 @@ router.put("/:id_aula/:id_tutoria/:id_tutor", async (req, res) => {
     const result = await pool.query(
       `UPDATE public.asigna 
        SET hora_inicio=$1, hora_fin=$2, dia=$3 
-       WHERE id_aula=$4 AND id_tutoria=$5 AND id_tutor=$6 
+       WHERE id_aula=$4 AND id_tutoria=$5 AND id_tutor=$6 AND activo = TRUE 
        RETURNING *`,
       [hora_inicio, hora_fin, dia, id_aula, id_tutoria, id_tutor]
     );
@@ -83,12 +84,39 @@ router.put("/:id_aula/:id_tutoria/:id_tutor", async (req, res) => {
   }
 });
 
-// DELETE - Eliminar asignación
+// DELETE - Eliminación lógica (soft delete)
 router.delete("/:id_aula/:id_tutoria/:id_tutor", async (req, res) => {
   try {
     const { id_aula, id_tutoria, id_tutor } = req.params;
+    
+    // En lugar de DELETE, hacemos un UPDATE para marcar como inactivo
     const result = await pool.query(
-      `DELETE FROM public.asigna 
+      `UPDATE public.asigna SET activo = FALSE 
+       WHERE id_aula = $1 AND id_tutoria = $2 AND id_tutor = $3 AND activo = TRUE 
+       RETURNING *`,
+      [id_aula, id_tutoria, id_tutor]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Asignación no encontrada o ya está eliminada" });
+    }
+
+    res.json({ 
+      mensaje: "Asignación deshabilitada correctamente",
+      asignacion: result.rows[0] 
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Error al deshabilitar asignación" });
+  }
+});
+
+// OPCIONAL: Endpoint para reactivar una asignación
+router.patch("/:id_aula/:id_tutoria/:id_tutor/activar", async (req, res) => {
+  try {
+    const { id_aula, id_tutoria, id_tutor } = req.params;
+    
+    const result = await pool.query(
+      `UPDATE public.asigna SET activo = TRUE 
        WHERE id_aula = $1 AND id_tutoria = $2 AND id_tutor = $3 
        RETURNING *`,
       [id_aula, id_tutoria, id_tutor]
@@ -98,9 +126,12 @@ router.delete("/:id_aula/:id_tutoria/:id_tutor", async (req, res) => {
       return res.status(404).json({ error: "Asignación no encontrada" });
     }
 
-    res.json({ mensaje: "Asignación eliminada correctamente" });
+    res.json({ 
+      mensaje: "Asignación reactivada correctamente",
+      asignacion: result.rows[0] 
+    });
   } catch (error) {
-    res.status(500).json({ error: "Error al eliminar asignación" });
+    res.status(500).json({ error: "Error al reactivar asignación" });
   }
 });
 

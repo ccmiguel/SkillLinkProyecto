@@ -16,6 +16,11 @@ import preguntasRouter from "./src/routes/preguntas.js";
 import opcionesRouter from "./src/routes/opciones.js";
 import respuestasRouter from "./src/routes/respuestas.js";
 
+// Importar NUEVAS rutas de autenticación y usuarios
+import authRoutes from "./src/routes/authRoutes.js";
+import usuarioRoutes from "./src/routes/usuarioRoutes.js";
+import aprobacionRoutes from "./src/routes/aprobacionRoutes.js";
+
 dotenv.config();
 
 const app = express();
@@ -27,6 +32,9 @@ app.get("/", (req, res) => {
     mensaje: "API SkillLink funcionando 🚀",
     version: "1.0.0",
     endpoints: {
+      auth: "/auth",
+      usuarios: "/usuarios",
+      aprobaciones: "/aprobaciones",
       tutorias: "/tutorias",
       aulas: "/aulas", 
       tutores: "/tutores",
@@ -44,6 +52,9 @@ app.get("/", (req, res) => {
 });
 
 // Configurar todas las rutas
+app.use("/auth", authRoutes);
+app.use("/usuarios", usuarioRoutes);
+app.use("/aprobaciones", aprobacionRoutes);
 app.use("/tutorias", tutoriasRouter);
 app.use("/aulas", aulasRouter);
 app.use("/tutores", tutoresRouter);
@@ -72,4 +83,8 @@ app.listen(PORT, () => {
   console.log(`   GET  http://localhost:${PORT}/preguntas`);
   console.log(`   GET  http://localhost:${PORT}/opciones`);
   console.log(`   GET  http://localhost:${PORT}/respuestas`);
+  console.log(`🔐 Nuevos endpoints de autenticación:`);
+  console.log(`   POST http://localhost:${PORT}/auth/registro`);
+  console.log(`   POST http://localhost:${PORT}/auth/login`);
+  console.log(`   GET  http://localhost:${PORT}/usuarios/pendientes`);
 });
